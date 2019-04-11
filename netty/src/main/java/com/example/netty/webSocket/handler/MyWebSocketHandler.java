@@ -54,8 +54,20 @@ public class MyWebSocketHandler extends SimpleChannelInboundHandler<Object> {
         ctx.close();
     }
 
-    // 服务端处理客户端webSocket请求的核心方法
     @Override
+    protected void channelRead0(ChannelHandlerContext channelHandlerContext, Object o) throws Exception {
+        if (o instanceof FullHttpRequest) {
+            // 处理客户端向服务端发起http握手请求的业务
+            handHttpRequest(channelHandlerContext, (FullHttpRequest) o);
+        } else if (o instanceof WebSocketFrame) {
+            // 处理webSocket的连接业务
+            log.info(channelHandlerContext.channel().id());
+            handWebSocketFrame(channelHandlerContext, (WebSocketFrame) o);
+        }
+    }
+
+    // 服务端处理客户端webSocket请求的核心方法
+
     protected void messageReceived(ChannelHandlerContext channelHandlerContext, Object o) throws Exception {
 
         if (o instanceof FullHttpRequest) {
@@ -92,9 +104,6 @@ public class MyWebSocketHandler extends SimpleChannelInboundHandler<Object> {
 
         // 群发，服务端向每一个连接的客户端发送消息
         NettyConfig.group.writeAndFlush(tws);
-
-
-        NettyConfig.group.writeAndFlush(tws, null);
 
     }
 

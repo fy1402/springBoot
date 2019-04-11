@@ -21,8 +21,6 @@ import java.net.InetSocketAddress;
 @Log4j2
 public class EchoServer {
 
-    private final int port = 8090;
-
     public EchoServer() {}
 
 //    public static void main(String[] args) throws Exception {
@@ -36,7 +34,7 @@ public class EchoServer {
 //        new EchoServer(port).start();                //2 呼叫服务器的 start() 方法
 //    }
 
-    public void start() throws Exception {
+    public void start(int port) throws Exception {
         NioEventLoopGroup group = new NioEventLoopGroup(); //3 创建 EventLoopGroup
         try {
             ServerBootstrap b = new ServerBootstrap();

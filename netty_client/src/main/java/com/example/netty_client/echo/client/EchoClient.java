@@ -14,7 +14,7 @@ import java.net.InetSocketAddress;
 public class EchoClient {
 
     private final String host = "localhost";
-    private final int port = 8090;
+    private final int port = 8082;
 
     public EchoClient() {}
 
