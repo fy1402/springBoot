@@ -50,7 +50,8 @@ public class ChineseProverbClient implements CommandLineRunner{
 
             ChannelFuture f = b.bind(port).sync();
 
-            DatagramPacket datagramPacket = new DatagramPacket(Unpooled.copiedBuffer("谚语字典查询?", CharsetUtil.UTF_8), new InetSocketAddress("255.255.255.255", port));
+            log.info("开始谚语字典查询");
+            DatagramPacket datagramPacket = new DatagramPacket(Unpooled.copiedBuffer("谚语字典查询?", CharsetUtil.UTF_8), new InetSocketAddress("192.168.199.213", port));
             f.channel().writeAndFlush(datagramPacket).sync();
             if (!f.channel().closeFuture().await(15000)) {
                 log.info("查询超时！");

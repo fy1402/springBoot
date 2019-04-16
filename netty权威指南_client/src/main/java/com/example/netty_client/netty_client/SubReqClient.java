@@ -28,7 +28,7 @@ public class SubReqClient implements CommandLineRunner {
             @Override
             public void run() {
                 try {
-                    connect("127.0.0.1", 8082);
+//                    connect("127.0.0.1", 8082);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
