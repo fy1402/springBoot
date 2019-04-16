@@ -1,4 +1,4 @@
-package com.example.netty.netty入门;
+package com.example.netty.netty_server;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;

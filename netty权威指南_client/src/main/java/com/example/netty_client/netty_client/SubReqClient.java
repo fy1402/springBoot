@@ -1,6 +1,7 @@
-package com.example.netty_client.netty入门;
+package com.example.netty_client.netty_client;
 
 
+import com.alibaba.fastjson.JSON;
 import com.nio.serlizable.SubscribeReq;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
@@ -23,7 +24,16 @@ public class SubReqClient implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        connect("127.0.0.1", 8082);
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    connect("127.0.0.1", 8082);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
     }
 
     public void connect(String host, int port) throws Exception {
@@ -81,7 +91,7 @@ class SubReqClientHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        log.info("Receive server response : [" + com.alibaba.fastjson.JSON.toJSONString(msg) + "]" );
+        log.info("Receive server response : [" + JSON.toJSONString(msg) + "]" );
     }
 
     @Override

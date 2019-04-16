@@ -1,4 +1,4 @@
-package com.example.netty_client.netty入门;
+package com.example.netty_client.netty_client;
 
 
 import io.netty.bootstrap.Bootstrap;
@@ -7,7 +7,6 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
-import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LineBasedFrameDecoder;
 import io.netty.handler.codec.string.StringDecoder;

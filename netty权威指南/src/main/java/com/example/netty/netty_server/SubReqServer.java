@@ -1,4 +1,4 @@
-package com.example.netty.netty入门;
+package com.example.netty.netty_server;
 
 import com.alibaba.fastjson.JSON;
 import com.nio.serlizable.SubscibeResp;
@@ -65,7 +65,7 @@ public class SubReqServer implements CommandLineRunner {
                     });
 
             ChannelFuture f = b.bind(port).sync();
-
+            log.info("订购服务启动：" + port);
             f.channel().closeFuture().sync();
 
         } finally {
