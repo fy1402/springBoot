@@ -25,7 +25,6 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.util.regex.Pattern;
 
-import static com.sun.deploy.net.HttpRequest.CONTENT_LENGTH;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONNECTION;
 import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpHeaders.Names.LOCATION;
@@ -279,10 +278,6 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
     private static void setContentTypeHeader(HttpResponse response, File file) {
         MimetypesFileTypeMap mimetypesFileTypeMap = new MimetypesFileTypeMap();
         response.headers().set(CONTENT_TYPE, mimetypesFileTypeMap.getContentType(file.getPath()));
-    }
-
-    private static void setContentLength(HttpResponse response, long fileLength) {
-        response.headers().set(CONTENT_LENGTH, fileLength);
     }
 
 }
