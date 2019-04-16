@@ -77,9 +77,9 @@ public class HttpFileServer implements CommandLineRunner {
                                     .addLast("fileServerHandler", new HttpFileServerHandler(url));
                         }
                     });
-            ChannelFuture f = b.bind("172.18.33.124", port).sync();
+            ChannelFuture f = b.bind("127.0.0.1", port).sync();
 
-            log.info("HTTP 文件目录服务器启动， 网址是 ： " + "http://172.18.33.124:" + port + url);
+            log.info("HTTP 文件目录服务器启动， 网址是 ： " + "http://127.0.0.1:" + port + url);
 
             f.channel().closeFuture().sync();
 
