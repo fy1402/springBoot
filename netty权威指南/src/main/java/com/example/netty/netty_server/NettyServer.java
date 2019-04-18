@@ -228,7 +228,7 @@ class LoginAuthRespHandler extends ChannelInboundHandlerAdapter {
     @Override
     public void channelRead(ChannelHandlerContext channelHandlerContext, Object msg) throws Exception {
         NettyMessage nettyMessage = (NettyMessage)msg;
-        if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == (byte)1) {
+        if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == (byte)3) {
             String nodeIndex = channelHandlerContext.channel().remoteAddress().toString();
             NettyMessage loginResp = null;
 

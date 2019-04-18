@@ -119,6 +119,7 @@ class HeartBeatReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
 
     @Override
     protected void channelRead0(ChannelHandlerContext channelHandlerContext, NettyMessage nettyMessage) throws Exception {
+        log.info("HeartBeatReqHandler  Read0");
         if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == (byte)2) {
             HeartBeatReqHandler handler = new HeartBeatReqHandler();
             // 心跳定时器，
@@ -157,7 +158,7 @@ class HeartBeatReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
  * 定义LoginAuthReqHandler， 客户端发送请求的业务ChannelHandler
  */
 @Log4j2
-class LoginAuthReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
+class LoginAuthReqHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
@@ -173,25 +174,19 @@ class LoginAuthReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
     }
 
     @Override
-    protected void channelRead0(ChannelHandlerContext channelHandlerContext, NettyMessage nettyMessage) throws Exception {
-        // 如果是握手应答消息，需要判断是否认证成功
-//        if (nettyMessage.getHeader().getType() == (byte)4) {
-//            log.info("Received from server response");
-//        }
-//        channelHandlerContext.fireChannelRead(nettyMessage);
-
+    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        NettyMessage nettyMessage = (NettyMessage)msg;
         if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == 4) {
             byte loginResult = (byte)nettyMessage.getBody();
             if (loginResult != (byte)0) {
-                channelHandlerContext.close(); //握手失败
+                ctx.close(); //握手失败
             } else {
                 log.info("login is ok " + nettyMessage);
-                channelHandlerContext.fireChannelRead(nettyMessage);
+                ctx.fireChannelRead(nettyMessage);
             }
         } else {
-            channelHandlerContext.fireChannelRead(nettyMessage);
+            ctx.fireChannelRead(nettyMessage);
         }
-
     }
 
     @Override
