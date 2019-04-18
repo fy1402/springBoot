@@ -182,7 +182,7 @@ class LoginAuthReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
     private NettyMessage buildLoginReq() {
         NettyMessage message = new NettyMessage();
         Header header = new Header();
-        header.setType((byte)1);
+        header.setType((byte)3); // 握手请求消息
         message.setHeader(header);
         return message;
     }
@@ -190,10 +190,23 @@ class LoginAuthReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
     @Override
     protected void channelRead0(ChannelHandlerContext channelHandlerContext, NettyMessage nettyMessage) throws Exception {
         // 如果是握手应答消息，需要判断是否认证成功
-        if (nettyMessage.getHeader().getType() == (byte)2) {
-            log.info("Received from server response");
+//        if (nettyMessage.getHeader().getType() == (byte)4) {
+//            log.info("Received from server response");
+//        }
+//        channelHandlerContext.fireChannelRead(nettyMessage);
+
+        if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == 4) {
+            byte loginResult = (byte)nettyMessage.getBody();
+            if (loginResult != (byte)0) {
+                channelHandlerContext.close(); //握手失败
+            } else {
+                log.info("login is ok " + nettyMessage);
+                channelHandlerContext.fireChannelRead(nettyMessage);
+            }
+        } else {
+            channelHandlerContext.fireChannelRead(nettyMessage);
         }
-        channelHandlerContext.fireChannelRead(nettyMessage);
+
     }
 
     @Override
@@ -253,7 +266,7 @@ class LoginAuthRespHandler extends SimpleChannelInboundHandler<NettyMessage> {
     private NettyMessage buildLoginResponse(byte result) {
         NettyMessage message = new NettyMessage();
         Header header = new Header();
-        header.setType((byte)2);
+        header.setType((byte)4); // 握手应答消息
         message.setHeader(header);
         message.setBody(result);
         return message;
