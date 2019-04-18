@@ -28,11 +28,11 @@ public class ChineseProverbClient implements CommandLineRunner{
         new Thread(new Runnable() {
             @Override
             public void run() {
-                try {
-                    connect(8085);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+//                try {
+//                    connect(8085);
+//                } catch (InterruptedException e) {
+//                    e.printStackTrace();
+//                }
             }
         }).start();
     }

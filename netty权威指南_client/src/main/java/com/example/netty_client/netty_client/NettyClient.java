@@ -45,7 +45,7 @@ public class NettyClient implements CommandLineRunner{
             @Override
             public void run() {
                 try {
-                    connect("127.0.0.1", 8086);
+                    connect("192.168.199.213", 8086);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }

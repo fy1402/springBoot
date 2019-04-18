@@ -216,7 +216,7 @@ class LoginAuthRespHandler extends SimpleChannelInboundHandler<NettyMessage> {
 
     private Map<String, Boolean> nodeCheck = new ConcurrentHashMap<String, Boolean>();
 
-    private String[] whiteList = {"127.0.0.1", "192.168.1.104"};
+    private String[] whiteList = {"127.0.0.1", "192.168.199.143"};
 
     @Override
     protected void channelRead0(ChannelHandlerContext channelHandlerContext, NettyMessage nettyMessage) throws Exception {
