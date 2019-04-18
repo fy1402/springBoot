@@ -172,7 +172,7 @@ class HeartBeatRespHandler extends SimpleChannelInboundHandler<NettyMessage> {
  * 定义LoginAuthReqHandler， 客户端发送请求的业务ChannelHandler
  */
 @Log4j2
-class LoginAuthReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
+class LoginAuthReqHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
@@ -188,25 +188,19 @@ class LoginAuthReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
     }
 
     @Override
-    protected void channelRead0(ChannelHandlerContext channelHandlerContext, NettyMessage nettyMessage) throws Exception {
-        // 如果是握手应答消息，需要判断是否认证成功
-//        if (nettyMessage.getHeader().getType() == (byte)4) {
-//            log.info("Received from server response");
-//        }
-//        channelHandlerContext.fireChannelRead(nettyMessage);
-
+    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        NettyMessage nettyMessage = (NettyMessage)msg;
         if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == 4) {
             byte loginResult = (byte)nettyMessage.getBody();
             if (loginResult != (byte)0) {
-                channelHandlerContext.close(); //握手失败
+                ctx.close(); //握手失败
             } else {
                 log.info("login is ok " + nettyMessage);
-                channelHandlerContext.fireChannelRead(nettyMessage);
+                ctx.fireChannelRead(nettyMessage);
             }
         } else {
-            channelHandlerContext.fireChannelRead(nettyMessage);
+            ctx.fireChannelRead(nettyMessage);
         }
-
     }
 
     @Override
@@ -225,14 +219,15 @@ class LoginAuthReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
  * 定义LoginAuthRespHandler类，服务器端响应Login的业务ChannelHandler
  */
 @Log4j2
-class LoginAuthRespHandler extends SimpleChannelInboundHandler<NettyMessage> {
+class LoginAuthRespHandler extends ChannelInboundHandlerAdapter {
 
     private Map<String, Boolean> nodeCheck = new ConcurrentHashMap<String, Boolean>();
 
     private String[] whiteList = {"127.0.0.1", "192.168.199.143"};
 
     @Override
-    protected void channelRead0(ChannelHandlerContext channelHandlerContext, NettyMessage nettyMessage) throws Exception {
+    public void channelRead(ChannelHandlerContext channelHandlerContext, Object msg) throws Exception {
+        NettyMessage nettyMessage = (NettyMessage)msg;
         if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == (byte)1) {
             String nodeIndex = channelHandlerContext.channel().remoteAddress().toString();
             NettyMessage loginResp = null;
