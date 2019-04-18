@@ -1,20 +1,23 @@
-package com.example.netty_client.netty_client;
+package com.example.netty.netty_server;
 
-import io.netty.bootstrap.Bootstrap;
+import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
-import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.codec.MessageToMessageEncoder;
 import io.netty.handler.codec.marshalling.*;
+import io.netty.handler.logging.LogLevel;
+import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import lombok.extern.log4j.Log4j2;
 import org.jboss.marshalling.MarshallerFactory;
 import org.jboss.marshalling.Marshalling;
 import org.jboss.marshalling.MarshallingConfiguration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
@@ -22,22 +25,19 @@ import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Created by i-feng on 2019/4/17.
  */
-
 @Log4j2
 @Component
-public class NettyClient implements CommandLineRunner{
+public class NettyServer implements CommandLineRunner{
 
-    private ScheduledExecutorService executorService = Executors.newScheduledThreadPool(1);
-
-    EventLoopGroup group = new NioEventLoopGroup();
+    @Value("${netty_private_server_port}")
+    private int netty_private_server_port;
 
     @Override
     public void run(String... strings) throws Exception {
@@ -45,63 +45,46 @@ public class NettyClient implements CommandLineRunner{
             @Override
             public void run() {
                 try {
-                    connect("127.0.0.1", 8086);
+                    bind(netty_private_server_port);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
-
             }
         }).start();
     }
 
-    private void connect(String host, int port) throws InterruptedException {
+    private void bind(int port) throws InterruptedException {
+        EventLoopGroup bossGroup = new NioEventLoopGroup();
+        EventLoopGroup workerGroup = new NioEventLoopGroup();
 
         try {
-            Bootstrap b = new Bootstrap();
-            b.group(group)
-                    .channel(NioSocketChannel.class)
-                    .option(ChannelOption.TCP_NODELAY, true)
-                    .handler(new ChannelInitializer<SocketChannel>() {
+            ServerBootstrap b = new ServerBootstrap();
+            b.group(bossGroup, workerGroup)
+                    .channel(NioServerSocketChannel.class)
+                    .option(ChannelOption.SO_BACKLOG, 100)
+                    .handler(new LoggingHandler(LogLevel.INFO))
+                    .childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
                             socketChannel.pipeline()
                                     .addLast(new NettyMessageDecoder(1024 * 1024, 4, 4, -8, 0))
-                                    .addLast("MessageEncoder", new NettyMessageEncoder())
+                                    .addLast(new NettyMessageEncoder())
                                     .addLast("readTimeoutHandler", new ReadTimeoutHandler(50))
-                                    .addLast("LoginAuthHandler", new LoginAuthReqHandler())
-                                    .addLast("HeartBeatHandler", new HeartBeatReqHandler());
+                                    .addLast(new LoginAuthRespHandler())
+                                    .addLast("HeartBeatHandler", new HeartBeatRespHandler());
                         }
                     });
+            ChannelFuture f = b.bind(port).sync();
 
-            InetSocketAddress remoteAddress = new InetSocketAddress(host, port);
-    //        InetSocketAddress localAddress = new InetSocketAddress()
-
-            ChannelFuture f = b.connect(remoteAddress).sync();
-
-            log.info("Netty Client 连接开启: " + remoteAddress.getAddress() + ":" + remoteAddress.getPort());
+            log.info("NettyServer private 启动, port: " + port);
 
             f.channel().closeFuture().sync();
         } finally {
-            executorService.execute(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        TimeUnit.SECONDS.sleep(5);
-
-                        try {
-                            connect(host, port);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-            });
+            bossGroup.shutdownGracefully();
+            workerGroup.shutdownGracefully();
         }
     }
 }
-
 
 /**
  * 定义 HeartBeatReqHandler， 客户端心跳发送业务
@@ -152,6 +135,38 @@ class HeartBeatReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
     }
 }
 
+/**
+ * 服务的心跳应答
+ */
+@Log4j2
+class HeartBeatRespHandler extends SimpleChannelInboundHandler<NettyMessage> {
+    @Override
+    protected void channelRead0(ChannelHandlerContext channelHandlerContext, NettyMessage nettyMessage) throws Exception {
+        //返回心跳应答消息
+        if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == (byte)5) {
+            log.info("Receive client heart beat message : ---> " + nettyMessage);
+            NettyMessage message = buildHeartBeat();
+            log.info("Send heart beat response message to client : ---> " + message);
+            channelHandlerContext.writeAndFlush(message);
+        } else  {
+            channelHandlerContext.fireChannelRead(nettyMessage);
+        }
+    }
+
+    private NettyMessage buildHeartBeat() {
+        NettyMessage message = new NettyMessage();
+        Header header = new Header();
+        header.setType((byte)6);
+        message.setHeader(header);
+        return message;
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        ctx.close();
+        cause.printStackTrace();
+    }
+}
 
 /**
  * 定义LoginAuthReqHandler， 客户端发送请求的业务ChannelHandler
@@ -193,9 +208,67 @@ class LoginAuthReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
     }
 }
 
-    /**
-        * NettyMessage的Encoder，注意消息长度的计算方法，以及最后把Message传递出去
-        */
+/**
+ * 定义LoginAuthRespHandler类，服务器端响应Login的业务ChannelHandler
+ */
+@Log4j2
+class LoginAuthRespHandler extends SimpleChannelInboundHandler<NettyMessage> {
+
+    private Map<String, Boolean> nodeCheck = new ConcurrentHashMap<String, Boolean>();
+
+    private String[] whiteList = {"127.0.0.1", "192.168.1.104"};
+
+    @Override
+    protected void channelRead0(ChannelHandlerContext channelHandlerContext, NettyMessage nettyMessage) throws Exception {
+        if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == (byte)1) {
+            String nodeIndex = channelHandlerContext.channel().remoteAddress().toString();
+            NettyMessage loginResp = null;
+
+            // 重复登录， refuse
+            if (nodeCheck.containsKey(nodeIndex)) {
+                loginResp = buildLoginResponse((byte)-1);
+            } else {
+                InetSocketAddress address = (InetSocketAddress) channelHandlerContext.channel().remoteAddress();
+                String ip = address.getAddress().getHostAddress();
+                boolean isOk = false;
+                for (String wip : whiteList) {
+                    if (wip.equals(ip)) {
+                        isOk = true;
+                        break;
+                    }
+                }
+                loginResp = isOk ? buildLoginResponse((byte) 0) : buildLoginResponse((byte) -1);
+                if (isOk) {
+                    nodeCheck.put(nodeIndex, true);
+                }
+            }
+                log.info("The login response is : " + loginResp + " body [" + loginResp.getBody() + "]" );
+                channelHandlerContext.writeAndFlush(loginResp);
+
+        } else {
+            channelHandlerContext.fireChannelRead(nettyMessage);
+        }
+    }
+
+    private NettyMessage buildLoginResponse(byte result) {
+        NettyMessage message = new NettyMessage();
+        Header header = new Header();
+        header.setType((byte)2);
+        message.setHeader(header);
+        message.setBody(result);
+        return message;
+    }
+
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        ctx.close();
+        cause.printStackTrace();
+    }
+}
+
+
+/**
+ * NettyMessage的Encoder，注意消息长度的计算方法，以及最后把Message传递出去
+ */
 final class NettyMessageEncoder extends MessageToMessageEncoder<NettyMessage> {
 
     private NettyMarshallingEncoder marshallingEncoder;
@@ -326,7 +399,7 @@ class MarshallingCodeCFactory {
 /**
  * 扩展MarshallingEncoder 和 MarshallingDecoder
  */
-class NettyMarshallingEncoder extends MarshallingEncoder {
+class NettyMarshallingEncoder extends MarshallingEncoder{
 
     public NettyMarshallingEncoder(MarshallerProvider provider) {
         super(provider);
@@ -447,3 +520,4 @@ final class Header {
                 + ", type=" + type + ", priority=" + priority + ", attachment=" + attachment + "]";
     }
 }
+
