@@ -228,7 +228,7 @@ class LoginAuthRespHandler extends ChannelInboundHandlerAdapter {
     @Override
     public void channelRead(ChannelHandlerContext channelHandlerContext, Object msg) throws Exception {
         NettyMessage nettyMessage = (NettyMessage)msg;
-        if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == (byte)1) {
+        if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == (byte)3) {
             String nodeIndex = channelHandlerContext.channel().remoteAddress().toString();
             NettyMessage loginResp = null;
 
@@ -341,8 +341,8 @@ final class NettyMessageDecoder extends LengthFieldBasedFrameDecoder {
         marshallingDecoder = MarshallingCodeCFactory.buildMarshallingDecoder();
     }
 
-
-    public Object decode(ChannelHandlerContext ctx, ByteBuf in) throws Exception{
+    @Override
+    protected Object decode(ChannelHandlerContext ctx, ByteBuf in) throws Exception{
         ByteBuf frame = (ByteBuf)super.decode(ctx, in);
         if(frame == null){
             return null;
@@ -413,7 +413,8 @@ class NettyMarshallingEncoder extends MarshallingEncoder{
         super(provider);
     }
 
-    public void encode(ChannelHandlerContext ctx, Object msg, ByteBuf out) throws Exception{
+    @Override
+    protected void encode(ChannelHandlerContext ctx, Object msg, ByteBuf out) throws Exception{
         super.encode(ctx, msg, out);
     }
 }
@@ -428,7 +429,8 @@ class NettyMarshallingDecoder extends MarshallingDecoder {
         super(provider, maxObjectSize);
     }
 
-    public Object decode(ChannelHandlerContext ctx, ByteBuf in) throws Exception {
+    @Override
+    protected Object decode(ChannelHandlerContext ctx, ByteBuf in) throws Exception {
         return super.decode(ctx, in);
     }
 
