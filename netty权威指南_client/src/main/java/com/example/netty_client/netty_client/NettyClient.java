@@ -65,20 +65,18 @@ public class NettyClient implements CommandLineRunner{
                         @Override
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
                             socketChannel.pipeline()
-                                    .addLast(new NettyMessageDecoder(1024 * 1024, 4, 4, -8, 0))
+                                    .addLast("MessageDecoder", new NettyMessageDecoder(1024 * 1024, 4, 4, -8, 0))
                                     .addLast("MessageEncoder", new NettyMessageEncoder())
-                                    .addLast("readTimeoutHandler", new ReadTimeoutHandler(50))
+                                    .addLast("readTimeoutHandler", new ReadTimeoutHandler(10))
                                     .addLast("LoginAuthHandler", new LoginAuthReqHandler())
                                     .addLast("HeartBeatHandler", new HeartBeatReqHandler());
                         }
                     });
 
-            InetSocketAddress remoteAddress = new InetSocketAddress(host, port);
-    //        InetSocketAddress localAddress = new InetSocketAddress()
 
-            ChannelFuture f = b.connect(remoteAddress).sync();
+            ChannelFuture f = b.connect(host, port).sync();
 
-            log.info("Netty Client 连接开启: " + remoteAddress.getAddress() + ":" + remoteAddress.getPort());
+            log.info("Netty Client 连接开启: " + host + ":" + port);
 
             f.channel().closeFuture().sync();
         } finally {
@@ -175,6 +173,7 @@ class LoginAuthReqHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        log.info("收到握手应答消息");
         NettyMessage nettyMessage = (NettyMessage)msg;
         if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == 4) {
             byte loginResult = (byte)nettyMessage.getBody();
@@ -268,8 +267,12 @@ final class NettyMessageDecoder extends LengthFieldBasedFrameDecoder {
         marshallingDecoder = MarshallingCodeCFactory.buildMarshallingDecoder();
     }
 
+    @Override
+    protected Object decode(ChannelHandlerContext ctx, ByteBuf in) throws Exception {
+        return decode1(ctx, in);
+    }
 
-    public Object decode(ChannelHandlerContext ctx, ByteBuf in) throws Exception{
+    public Object decode1(ChannelHandlerContext ctx, ByteBuf in) throws Exception{
         ByteBuf frame = (ByteBuf)super.decode(ctx, in);
         if(frame == null){
             return null;
@@ -317,7 +320,7 @@ class MarshallingCodeCFactory {
         MarshallingConfiguration configuration = new MarshallingConfiguration();
         configuration.setVersion(5);
         UnmarshallerProvider provider = new DefaultUnmarshallerProvider(marshallerFactory, configuration);
-        NettyMarshallingDecoder decoder = new NettyMarshallingDecoder(provider, 1024);
+        NettyMarshallingDecoder decoder = new NettyMarshallingDecoder(provider, 10240);
         return decoder;
     }
 
@@ -340,7 +343,8 @@ class NettyMarshallingEncoder extends MarshallingEncoder {
         super(provider);
     }
 
-    public void encode(ChannelHandlerContext ctx, Object msg, ByteBuf out) throws Exception{
+    @Override
+    protected void encode(ChannelHandlerContext ctx, Object msg, ByteBuf out) throws Exception{
         super.encode(ctx, msg, out);
     }
 }
@@ -355,7 +359,8 @@ class NettyMarshallingDecoder extends MarshallingDecoder {
         super(provider, maxObjectSize);
     }
 
-    public Object decode(ChannelHandlerContext ctx, ByteBuf in) throws Exception {
+    @Override
+    protected Object decode(ChannelHandlerContext ctx, ByteBuf in) throws Exception {
         return super.decode(ctx, in);
     }
 
