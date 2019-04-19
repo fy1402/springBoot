@@ -1,5 +1,6 @@
 package com.example.netty_client.netty_client;
 
+import com.alibaba.fastjson.JSON;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -22,10 +23,7 @@ import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 /**
  * Created by i-feng on 2019/4/17.
@@ -45,7 +43,8 @@ public class NettyClient implements CommandLineRunner{
             @Override
             public void run() {
                 try {
-                    connect("192.168.199.213", 8086);
+//                    connect("192.168.199.213", 8086);
+                    connect("172.18.44.32", 8086);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -65,10 +64,10 @@ public class NettyClient implements CommandLineRunner{
                         @Override
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
                             socketChannel.pipeline()
-                                    .addLast("MessageDecoder", new NettyMessageDecoder(1024 * 1024, 4, 4, -8, 0))
-                                    .addLast("MessageEncoder", new NettyMessageEncoder())
+                                    .addLast(new NettyMessageDecoder(1024 * 1024, 4, 4, -8, 0))
+                                    .addLast(new NettyMessageEncoder())
                                     .addLast("readTimeoutHandler", new ReadTimeoutHandler(10))
-                                    .addLast("LoginAuthHandler", new LoginAuthReqHandler())
+                                    .addLast(new LoginAuthReqHandler())
                                     .addLast("HeartBeatHandler", new HeartBeatReqHandler());
                         }
                     });
@@ -79,6 +78,7 @@ public class NettyClient implements CommandLineRunner{
             log.info("Netty Client 连接开启: " + host + ":" + port);
 
             f.channel().closeFuture().sync();
+
         } finally {
             executorService.execute(new Runnable() {
                 @Override
@@ -117,7 +117,6 @@ class HeartBeatReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
 
     @Override
     protected void channelRead0(ChannelHandlerContext channelHandlerContext, NettyMessage nettyMessage) throws Exception {
-        log.info("HeartBeatReqHandler  Read0");
         if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == (byte)2) {
             HeartBeatReqHandler handler = new HeartBeatReqHandler();
             // 心跳定时器，
@@ -151,6 +150,38 @@ class HeartBeatReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
     }
 }
 
+/**
+ * 服务的心跳应答
+ */
+@Log4j2
+class HeartBeatRespHandler extends SimpleChannelInboundHandler<NettyMessage> {
+    @Override
+    protected void channelRead0(ChannelHandlerContext channelHandlerContext, NettyMessage nettyMessage) throws Exception {
+        //返回心跳应答消息
+        if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == (byte)5) {
+            log.info("Receive client heart beat message : ---> " + nettyMessage);
+            NettyMessage message = buildHeartBeat();
+            log.info("Send heart beat response message to client : ---> " + message);
+            channelHandlerContext.writeAndFlush(message);
+        } else  {
+            channelHandlerContext.fireChannelRead(nettyMessage);
+        }
+    }
+
+    private NettyMessage buildHeartBeat() {
+        NettyMessage message = new NettyMessage();
+        Header header = new Header();
+        header.setType((byte)6);
+        message.setHeader(header);
+        return message;
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        ctx.close();
+        cause.printStackTrace();
+    }
+}
 
 /**
  * 定义LoginAuthReqHandler， 客户端发送请求的业务ChannelHandler
@@ -173,7 +204,6 @@ class LoginAuthReqHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        log.info("收到握手应答消息");
         NettyMessage nettyMessage = (NettyMessage)msg;
         if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == 4) {
             byte loginResult = (byte)nettyMessage.getBody();
@@ -200,9 +230,68 @@ class LoginAuthReqHandler extends ChannelInboundHandlerAdapter {
     }
 }
 
-    /**
-        * NettyMessage的Encoder，注意消息长度的计算方法，以及最后把Message传递出去
-        */
+/**
+ * 定义LoginAuthRespHandler类，服务器端响应Login的业务ChannelHandler
+ */
+@Log4j2
+class LoginAuthRespHandler extends ChannelInboundHandlerAdapter {
+
+    private Map<String, Boolean> nodeCheck = new ConcurrentHashMap<String, Boolean>();
+
+    private String[] whiteList = {"127.0.0.1", "192.168.199.143", "192.168.199.213"};
+
+    @Override
+    public void channelRead(ChannelHandlerContext channelHandlerContext, Object msg) throws Exception {
+        NettyMessage nettyMessage = (NettyMessage)msg;
+        if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == (byte)3) {
+            String nodeIndex = channelHandlerContext.channel().remoteAddress().toString();
+            NettyMessage loginResp = null;
+
+            // 重复登录， refuse
+            if (nodeCheck.containsKey(nodeIndex)) {
+                loginResp = buildLoginResponse((byte)-1);
+            } else {
+                InetSocketAddress address = (InetSocketAddress) channelHandlerContext.channel().remoteAddress();
+                String ip = address.getAddress().getHostAddress();
+                boolean isOk = false;
+                for (String wip : whiteList) {
+                    if (wip.equals(ip)) {
+                        isOk = true;
+                        break;
+                    }
+                }
+                loginResp = isOk ? buildLoginResponse((byte) 0) : buildLoginResponse((byte) -1);
+                if (isOk) {
+                    nodeCheck.put(nodeIndex, true);
+                }
+            }
+            log.info("The login response is : " + loginResp + " body [" + loginResp.getBody() + "]" );
+            channelHandlerContext.writeAndFlush(loginResp);
+
+        } else {
+            channelHandlerContext.fireChannelRead(nettyMessage);
+        }
+    }
+
+    private NettyMessage buildLoginResponse(byte result) {
+        NettyMessage message = new NettyMessage();
+        Header header = new Header();
+        header.setType((byte)4); // 握手应答消息
+        message.setHeader(header);
+        message.setBody(result);
+        return message;
+    }
+
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        ctx.close();
+        cause.printStackTrace();
+    }
+}
+
+
+/**
+ * NettyMessage的Encoder，注意消息长度的计算方法，以及最后把Message传递出去
+ */
 final class NettyMessageEncoder extends MessageToMessageEncoder<NettyMessage> {
 
     private NettyMarshallingEncoder marshallingEncoder;
@@ -268,11 +357,7 @@ final class NettyMessageDecoder extends LengthFieldBasedFrameDecoder {
     }
 
     @Override
-    protected Object decode(ChannelHandlerContext ctx, ByteBuf in) throws Exception {
-        return decode1(ctx, in);
-    }
-
-    public Object decode1(ChannelHandlerContext ctx, ByteBuf in) throws Exception{
+    protected Object decode(ChannelHandlerContext ctx, ByteBuf in) throws Exception{
         ByteBuf frame = (ByteBuf)super.decode(ctx, in);
         if(frame == null){
             return null;
@@ -320,7 +405,7 @@ class MarshallingCodeCFactory {
         MarshallingConfiguration configuration = new MarshallingConfiguration();
         configuration.setVersion(5);
         UnmarshallerProvider provider = new DefaultUnmarshallerProvider(marshallerFactory, configuration);
-        NettyMarshallingDecoder decoder = new NettyMarshallingDecoder(provider, 10240);
+        NettyMarshallingDecoder decoder = new NettyMarshallingDecoder(provider, 1024);
         return decoder;
     }
 
@@ -337,7 +422,7 @@ class MarshallingCodeCFactory {
 /**
  * 扩展MarshallingEncoder 和 MarshallingDecoder
  */
-class NettyMarshallingEncoder extends MarshallingEncoder {
+class NettyMarshallingEncoder extends MarshallingEncoder{
 
     public NettyMarshallingEncoder(MarshallerProvider provider) {
         super(provider);
