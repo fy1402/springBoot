@@ -250,8 +250,9 @@ class LoginAuthRespHandler extends ChannelInboundHandlerAdapter {
                     nodeCheck.put(nodeIndex, true);
                 }
             }
-                log.info("The login response is : " + loginResp + " body [" + loginResp.getBody() + "]" );
-                channelHandlerContext.writeAndFlush(loginResp);
+            log.info("The login response is : " + loginResp + " body [" + loginResp.getBody() + "]" );
+            log.info(channelHandlerContext.channel().remoteAddress());
+            channelHandlerContext.writeAndFlush(loginResp);
 
         } else {
             channelHandlerContext.fireChannelRead(nettyMessage);
