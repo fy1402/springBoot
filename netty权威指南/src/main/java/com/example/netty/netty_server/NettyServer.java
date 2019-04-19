@@ -223,7 +223,7 @@ class LoginAuthRespHandler extends ChannelInboundHandlerAdapter {
 
     private Map<String, Boolean> nodeCheck = new ConcurrentHashMap<String, Boolean>();
 
-    private String[] whiteList = {"127.0.0.1", "192.168.199.143"};
+    private String[] whiteList = {"127.0.0.1", "192.168.199.143", "192.168.199.213"};
 
     @Override
     public void channelRead(ChannelHandlerContext channelHandlerContext, Object msg) throws Exception {
