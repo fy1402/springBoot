@@ -105,8 +105,7 @@ class HeartBeatReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
 
     @Override
     protected void channelRead0(ChannelHandlerContext channelHandlerContext, NettyMessage nettyMessage) throws Exception {
-        if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == (byte)2) {
-            HeartBeatReqHandler handler = new HeartBeatReqHandler();
+        if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == (byte)4) {
             // 心跳定时器，
             heartBeat = channelHandlerContext.executor().scheduleAtFixedRate(new HeartBeatTask(channelHandlerContext), 0, 5000, TimeUnit.MILLISECONDS);
         } else if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == (byte)6) {
@@ -126,7 +125,9 @@ class HeartBeatReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
 
         @Override
         public void run() {
-            NettyMessage message;
+            NettyMessage message = buildHeartBeat();
+            log.info("client send heart message :　" + message);;
+            ctx.writeAndFlush(message);
         }
     }
 
@@ -134,6 +135,7 @@ class HeartBeatReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
         NettyMessage message = new NettyMessage();
         Header header = new Header();
         header.setType((byte)5);
+        message.setHeader(header);
         return message;
     }
 }
@@ -194,13 +196,19 @@ class LoginAuthReqHandler extends ChannelInboundHandlerAdapter {
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         NettyMessage nettyMessage = (NettyMessage)msg;
         if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == 4) {
-            byte loginResult = (byte)nettyMessage.getBody();
-            if (loginResult != (byte)0) {
-                ctx.close(); //握手失败
+            if (nettyMessage.getBody() != null) {
+                byte loginResult = (byte)nettyMessage.getBody();
+                if (loginResult != (byte)0) {
+                    ctx.close(); //握手失败
+                } else {
+                    log.info("login is ok " + nettyMessage);
+                    ctx.fireChannelRead(nettyMessage);
+                }
             } else {
                 log.info("login is ok " + nettyMessage);
                 ctx.fireChannelRead(nettyMessage);
             }
+
         } else {
             ctx.fireChannelRead(nettyMessage);
         }
@@ -254,7 +262,6 @@ class LoginAuthRespHandler extends ChannelInboundHandlerAdapter {
                 }
             }
             log.info("The login response is : " + loginResp + " body [" + loginResp.getBody() + "]" );
-            log.info(channelHandlerContext.channel().remoteAddress());
             channelHandlerContext.writeAndFlush(loginResp);
 
         } else {
@@ -339,6 +346,27 @@ final class NettyMessageDecoder extends LengthFieldBasedFrameDecoder {
 
     private NettyMarshallingDecoder marshallingDecoder;
 
+    /**
+     * byteOrder是指明Length字段是大端序还是小端序，因为Netty要读取Length字段的值，所以大端小端要设置好，默认Netty是大端序ByteOrder.BIG_ENDIAN。
+
+     maxFrameLength是指最大包长度，如果Netty最终生成的数据包超过这个长度，Netty就会报错。
+
+     lengthFieldOffset是指明Length的偏移位，在这里应该是2，因为先导码有2个Byte。
+
+     lengthFieldLength是Length字段长度，这里是2，Length字段占2个Byte。
+
+     lengthAdjustment 这个参数很多时候设为负数，这是最让小伙伴们迷惑的。下面我用一整段话来解释这个参数：
+     当Netty利用lengthFieldOffset（偏移位）和lengthFieldLength（Length字段长度）成功读出Length字段的值后，Netty认为这个值是指从Length字段之后，到包结束一共还有多少字节，如果这个值是13，那么Netty就会再等待13个Byte的数据到达后，拼接成一个完整的包。但是更多时候，Length字段的长度，是指整个包的长度，如果是这种情况，当Netty读出Length字段的时候，它已经读取了包的4个Byte的数据，所以，后续未到达的数据只有9个Byte，即13 - 4 = 9，这个时候，就要用lengthAdjustment来告诉Netty，后续的数据并没有13个Byte，要减掉4个Byte，所以lengthAdjustment要设为 -4！！！
+
+     initialBytesToStrip之前的几个参数，已经足够netty识别出整个数据包了，但是很多时候，调用者只关心包的内容，包的头部完全可以丢弃掉，initialBytesToStrip就是用来告诉Netty，识别出整个数据包之后，我只要从initialBytesToStrip起的数据，比如这里initialBytesToStrip设置为4，那么Netty就会跳过包头，解析出包的内容“12345678”。
+
+     failFast 参数一般设置为true，当这个参数为true时，netty一旦读到Length字段，并判断Length超过maxFrameLength，就立即抛出异常。
+     * @param maxFrameLength
+     * @param lengthFieldOffset
+     * @param lengthFieldLength
+     * @param lengthAdjustment
+     * @param initialBytesToStrip
+     */
     public NettyMessageDecoder(int maxFrameLength, int lengthFieldOffset,
                                int lengthFieldLength,int lengthAdjustment, int initialBytesToStrip) {
         super(maxFrameLength, lengthFieldOffset, lengthFieldLength, lengthAdjustment, initialBytesToStrip);
@@ -439,99 +467,4 @@ class NettyMarshallingDecoder extends MarshallingDecoder {
     }
 
 }
-
-///**
-// * Netty  消息定义类
-// */
-//final class NettyMessage implements Serializable{
-//    private Header header; // 消息头
-//    private Object body; // 消息体
-//
-//    public Header getHeader() {
-//        return header;
-//    }
-//
-//    public void setHeader(Header header) {
-//        this.header = header;
-//    }
-//
-//    public Object getBody() {
-//        return body;
-//    }
-//
-//    public void setBody(Object body) {
-//        this.body = body;
-//    }
-//
-//    @Override
-//    public String toString(){
-//        return "NettyMessage [header=" + header + "]";
-//    }
-//}
-//
-///**
-// * Netty 消息头 定义
-// */
-//final class Header implements Serializable{
-//    private int crcCode = 0xabef0101;
-//    private int length; //消息长度
-//    private long sessionID; // 回话ID
-//    private byte type; // 消息类型
-//    private byte priority; // 消息优先级
-//    private Map<String, Object> attachment = new HashMap<String, Object>(); // 附件
-//
-//    public int getCrcCode() {
-//        return crcCode;
-//    }
-//
-//    public void setCrcCode(int crcCode) {
-//        this.crcCode = crcCode;
-//    }
-//
-//    public int getLength() {
-//        return length;
-//    }
-//
-//    public void setLength(int length) {
-//        this.length = length;
-//    }
-//
-//    public long getSessionID() {
-//        return sessionID;
-//    }
-//
-//    public void setSessionID(long sessionID) {
-//        this.sessionID = sessionID;
-//    }
-//
-//    public byte getType() {
-//        return type;
-//    }
-//
-//    public void setType(byte type) {
-//        this.type = type;
-//    }
-//
-//    public byte getPriority() {
-//        return priority;
-//    }
-//
-//    public void setPriority(byte priority) {
-//        this.priority = priority;
-//    }
-//
-//    public Map<String, Object> getAttachment() {
-//        return attachment;
-//    }
-//
-//    public void setAttachment(Map<String, Object> attachment) {
-//        this.attachment = attachment;
-//    }
-//
-//    @Override
-//    public String toString(){
-//        return "Header [crcCode=" + crcCode + ", length=" + length + ", sessionID=" + sessionID
-//                + ", type=" + type + ", priority=" + priority + ", attachment=" + attachment + "]";
-//    }
-//}
 
