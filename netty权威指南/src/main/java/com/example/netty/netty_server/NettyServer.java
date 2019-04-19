@@ -72,7 +72,7 @@ public class NettyServer implements CommandLineRunner{
                             socketChannel.pipeline()
                                     .addLast(new NettyMessageDecoder(1024 * 1024, 4, 4, -8, 0))
                                     .addLast(new NettyMessageEncoder())
-                                    .addLast("readTimeoutHandler", new ReadTimeoutHandler(50))
+                                    .addLast("readTimeoutHandler", new ReadTimeoutHandler(10))
                                     .addLast(new LoginAuthRespHandler())
                                     .addLast("HeartBeatHandler", new HeartBeatRespHandler());
                         }
@@ -237,7 +237,7 @@ class LoginAuthRespHandler extends ChannelInboundHandlerAdapter {
 
             // 重复登录， refuse
             if (nodeCheck.containsKey(nodeIndex)) {
-                loginResp = buildLoginResponse(-1);
+                loginResp = buildLoginResponse((byte)-1);
             } else {
                 InetSocketAddress address = (InetSocketAddress) channelHandlerContext.channel().remoteAddress();
                 String ip = address.getAddress().getHostAddress();
@@ -248,7 +248,7 @@ class LoginAuthRespHandler extends ChannelInboundHandlerAdapter {
                         break;
                     }
                 }
-                loginResp = isOk ? buildLoginResponse(0) : buildLoginResponse(-1);
+                loginResp = isOk ? buildLoginResponse((byte) 0) : buildLoginResponse((byte) -1);
                 if (isOk) {
                     nodeCheck.put(nodeIndex, true);
                 }
@@ -262,7 +262,7 @@ class LoginAuthRespHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    private NettyMessage buildLoginResponse(int result) {
+    private NettyMessage buildLoginResponse(byte result) {
         NettyMessage message = new NettyMessage();
         Header header = new Header();
         header.setType((byte)4); // 握手应答消息
@@ -394,7 +394,7 @@ class MarshallingCodeCFactory {
         MarshallingConfiguration configuration = new MarshallingConfiguration();
         configuration.setVersion(5);
         UnmarshallerProvider provider = new DefaultUnmarshallerProvider(marshallerFactory, configuration);
-        NettyMarshallingDecoder decoder = new NettyMarshallingDecoder(provider, 1024);
+        NettyMarshallingDecoder decoder = new NettyMarshallingDecoder(provider, 10240);
         return decoder;
     }
 
