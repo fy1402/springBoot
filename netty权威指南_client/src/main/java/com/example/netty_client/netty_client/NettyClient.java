@@ -1,6 +1,5 @@
 package com.example.netty_client.netty_client;
 
-import com.alibaba.fastjson.JSON;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -11,6 +10,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.codec.MessageToMessageEncoder;
 import io.netty.handler.codec.marshalling.*;
+import io.netty.handler.codec.protobuf.ProtobufVarint32FrameDecoder;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import lombok.extern.log4j.Log4j2;
 import org.jboss.marshalling.MarshallerFactory;
@@ -19,6 +19,7 @@ import org.jboss.marshalling.MarshallingConfiguration;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
+import java.io.Serializable;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.List;
@@ -65,6 +66,7 @@ public class NettyClient implements CommandLineRunner{
                         @Override
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
                             socketChannel.pipeline()
+                                    .addLast(new ProtobufVarint32FrameDecoder())
                                     .addLast(new NettyMessageDecoder(1024 * 1024, 4, 4, -8, 0))
                                     .addLast(new NettyMessageEncoder())
                                     .addLast("readTimeoutHandler", new ReadTimeoutHandler(10))
@@ -455,7 +457,7 @@ class NettyMarshallingDecoder extends MarshallingDecoder {
 /**
  * Netty  消息定义类
  */
-final class NettyMessage {
+final class NettyMessage implements Serializable {
     private Header header; // 消息头
     private Object body; // 消息体
 
@@ -484,7 +486,7 @@ final class NettyMessage {
 /**
  * Netty 消息头 定义
  */
-final class Header {
+final class Header implements Serializable{
     private int crcCode = 0xabef0101;
     private int length; //消息长度
     private long sessionID; // 回话ID

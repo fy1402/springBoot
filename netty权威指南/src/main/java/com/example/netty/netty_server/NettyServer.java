@@ -21,6 +21,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
+import java.io.Serializable;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.List;
@@ -440,7 +441,7 @@ class NettyMarshallingDecoder extends MarshallingDecoder {
 /**
  * Netty  消息定义类
  */
-final class NettyMessage {
+final class NettyMessage implements Serializable{
     private Header header; // 消息头
     private Object body; // 消息体
 
@@ -469,7 +470,7 @@ final class NettyMessage {
 /**
  * Netty 消息头 定义
  */
-final class Header {
+final class Header implements Serializable{
     private int crcCode = 0xabef0101;
     private int length; //消息长度
     private long sessionID; // 回话ID
