@@ -237,7 +237,7 @@ class LoginAuthRespHandler extends ChannelInboundHandlerAdapter {
 
             // 重复登录， refuse
             if (nodeCheck.containsKey(nodeIndex)) {
-                loginResp = buildLoginResponse((byte)-1);
+                loginResp = buildLoginResponse(-1);
             } else {
                 InetSocketAddress address = (InetSocketAddress) channelHandlerContext.channel().remoteAddress();
                 String ip = address.getAddress().getHostAddress();
@@ -248,7 +248,7 @@ class LoginAuthRespHandler extends ChannelInboundHandlerAdapter {
                         break;
                     }
                 }
-                loginResp = isOk ? buildLoginResponse((byte) 0) : buildLoginResponse((byte) -1);
+                loginResp = isOk ? buildLoginResponse(0) : buildLoginResponse(-1);
                 if (isOk) {
                     nodeCheck.put(nodeIndex, true);
                 }
@@ -262,7 +262,7 @@ class LoginAuthRespHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    private NettyMessage buildLoginResponse(byte result) {
+    private NettyMessage buildLoginResponse(int result) {
         NettyMessage message = new NettyMessage();
         Header header = new Header();
         header.setType((byte)4); // 握手应答消息
