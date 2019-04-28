@@ -48,19 +48,18 @@
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/org.jboss.marshalling/jboss-marshalling-serial -->
+        <!--重点关注：jboss-marshalling-serial包，一开始我导的不是这个，是上面注释的jboss-marshalling，-->
         <dependency>
             <groupId>org.jboss.marshalling</groupId>
             <artifactId>jboss-marshalling-serial</artifactId>
-            <version>1.3.0.CR9</version>
-            <scope>test</scope>
+            <version>1.4.11.Final</version>
         </dependency>
-
         <!-- https://mvnrepository.com/artifact/org.jboss.marshalling/jboss-marshalling -->
-        <dependency>
-            <groupId>org.jboss.marshalling</groupId>
-            <artifactId>jboss-marshalling</artifactId>
-            <version>1.3.0.CR9</version>
-        </dependency>
+        <!--<dependency>-->
+            <!--<groupId>org.jboss.marshalling</groupId>-->
+            <!--<artifactId>jboss-marshalling</artifactId>-->
+            <!--<version>1.3.0.CR9</version>-->
+        <!--</dependency>-->
 
 
         <dependency>

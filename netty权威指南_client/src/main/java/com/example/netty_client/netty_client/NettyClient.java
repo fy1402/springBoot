@@ -1,6 +1,8 @@
 package com.example.netty_client.netty_client;
 
+import com.alibaba.fastjson.JSON;
 import com.nio.serlizable.Header;
+import com.nio.serlizable.MessageType;
 import com.nio.serlizable.NettyMessage;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
@@ -12,8 +14,8 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.codec.MessageToMessageEncoder;
 import io.netty.handler.codec.marshalling.*;
-import io.netty.handler.codec.protobuf.ProtobufVarint32FrameDecoder;
 import io.netty.handler.timeout.ReadTimeoutHandler;
+import io.netty.util.ReferenceCountUtil;
 import lombok.extern.log4j.Log4j2;
 import org.jboss.marshalling.MarshallerFactory;
 import org.jboss.marshalling.Marshalling;
@@ -21,12 +23,11 @@ import org.jboss.marshalling.MarshallingConfiguration;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
-import java.io.Serializable;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.*;
 
 /**
@@ -47,8 +48,9 @@ public class NettyClient implements CommandLineRunner{
             @Override
             public void run() {
                 try {
+                    connect("192.168.31.144", 8086);
 //                    connect("192.168.199.143", 8086);
-                    connect("192.168.199.213", 8086); // mac
+//                    connect("192.168.199.213", 8086); // mac
 //                    connect("172.18.44.32", 8086);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
@@ -74,7 +76,8 @@ public class NettyClient implements CommandLineRunner{
                                     .addLast(new NettyMessageEncoder())
                                     .addLast("readTimeoutHandler", new ReadTimeoutHandler(10))
                                     .addLast(new LoginAuthReqHandler())
-                                    .addLast("HeartBeatHandler", new HeartBeatReqHandler());
+                                    .addLast("HeartBeatReqHandler", new HeartBeatReqHandler());
+//                                    .addLast(new WorkerHanler());
                         }
                     });
 
@@ -107,33 +110,22 @@ public class NettyClient implements CommandLineRunner{
 }
 
 
-/**
- * 定义 HeartBeatReqHandler， 客户端心跳发送业务
- */
 @Log4j2
-class HeartBeatReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
-
+@ChannelHandler.Sharable
+class HearBeatReqOutHandler extends ChannelOutboundHandlerAdapter {
     private volatile ScheduledFuture<?> heartBeat;
-
     @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        ctx.close();
-        cause.printStackTrace();
-    }
-
-    @Override
-    protected void channelRead0(ChannelHandlerContext channelHandlerContext, NettyMessage nettyMessage) throws Exception {
-        if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == (byte)4) {
-            // 心跳定时器，
-            heartBeat = channelHandlerContext.executor().scheduleAtFixedRate(new HeartBeatTask(channelHandlerContext), 0, 5000, TimeUnit.MILLISECONDS);
-        } else if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == (byte)6) {
-            log.info("Client receive server heart beat message : ---> " + nettyMessage);
-        } else {
-            channelHandlerContext.fireChannelRead(nettyMessage);
+    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+        NettyMessage nettyMessage = (NettyMessage)msg;
+        if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == MessageType.LOGIN_RESP) {
+            heartBeat = ctx.executor().scheduleAtFixedRate(new HeartBeatTask(ctx), 0, 5000, TimeUnit.MILLISECONDS);
+            ReferenceCountUtil.release(msg);
         }
     }
 
-    private class HeartBeatTask implements Runnable {
+
+
+    protected class HeartBeatTask implements Runnable {
 
         private final ChannelHandlerContext ctx;
 
@@ -152,9 +144,89 @@ class HeartBeatReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
     private NettyMessage buildHeartBeat() {
         NettyMessage message = new NettyMessage();
         Header header = new Header();
-        header.setType((byte)5);
+        header.setType(MessageType.HEARTBEAT_REQ);
         message.setHeader(header);
         return message;
+    }
+
+}
+
+/**
+ * 定义 HeartBeatReqHandler， 客户端心跳发送业务
+ */
+@Log4j2
+class HeartBeatReqHandler extends SimpleChannelInboundHandler<NettyMessage> {
+
+    private volatile ScheduledFuture<?> heartBeat;
+    private volatile ScheduledFuture<?> worker;
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        ctx.close();
+        cause.printStackTrace();
+    }
+
+    @Override
+    protected void channelRead0(ChannelHandlerContext channelHandlerContext, NettyMessage nettyMessage) throws Exception {
+        if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == MessageType.LOGIN_RESP) {
+            // 心跳定时器，
+            heartBeat = channelHandlerContext.executor().scheduleAtFixedRate(new HeartBeatTask(channelHandlerContext), 0, 5000, TimeUnit.MILLISECONDS);
+//            worker = channelHandlerContext.executor().scheduleAtFixedRate(new WorkerTask(channelHandlerContext), 0, 10000, TimeUnit.MILLISECONDS);
+        } else if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() ==  MessageType.HEARTBEAT_RESP) {
+            log.info("Client receive server heart beat message : ---> " + nettyMessage);
+        } else {
+            channelHandlerContext.fireChannelRead(nettyMessage);
+        }
+    }
+
+    protected class HeartBeatTask implements Runnable {
+
+        private final ChannelHandlerContext ctx;
+
+        public HeartBeatTask(final ChannelHandlerContext ctx) {
+            this.ctx = ctx;
+        }
+
+        @Override
+        public void run() {
+            NettyMessage message = buildHeartBeat();
+            log.info("client send heart message :　" + message);;
+            ctx.writeAndFlush(message);
+        }
+    }
+
+    private NettyMessage buildHeartBeat() {
+        NettyMessage message = new NettyMessage();
+        Header header = new Header();
+        header.setType(MessageType.HEARTBEAT_REQ);
+        message.setHeader(header);
+        return message;
+    }
+
+    private class WorkerTask implements Runnable{
+
+        private final ChannelHandlerContext ctx;
+
+        public WorkerTask(final ChannelHandlerContext ctx) {
+            this.ctx = ctx;
+        }
+
+        @Override
+        public void run() {
+            NettyMessage msg = buildReqWorkerMessage();
+            ctx.writeAndFlush(msg);
+            log.info(JSON.toJSONString(msg));
+        }
+    }
+
+    private NettyMessage buildReqWorkerMessage() {
+        Worker worker = new Worker();
+        NettyMessage msg = new NettyMessage();
+        Header header = new Header();
+        header.setType(MessageType.BUSINESS_REQ);
+        msg.setHeader(header);
+        msg.setBody(worker);
+        return msg;
     }
 }
 
@@ -166,7 +238,7 @@ class HeartBeatRespHandler extends SimpleChannelInboundHandler<NettyMessage> {
     @Override
     protected void channelRead0(ChannelHandlerContext channelHandlerContext, NettyMessage nettyMessage) throws Exception {
         //返回心跳应答消息
-        if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == (byte)5) {
+        if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == MessageType.HEARTBEAT_REQ) {
             log.info("Receive client heart beat message : ---> " + nettyMessage);
             NettyMessage message = buildHeartBeat();
             log.info("Send heart beat response message to client : ---> " + message);
@@ -179,7 +251,7 @@ class HeartBeatRespHandler extends SimpleChannelInboundHandler<NettyMessage> {
     private NettyMessage buildHeartBeat() {
         NettyMessage message = new NettyMessage();
         Header header = new Header();
-        header.setType((byte)6);
+        header.setType(MessageType.HEARTBEAT_RESP);
         message.setHeader(header);
         return message;
     }
@@ -199,13 +271,14 @@ class LoginAuthReqHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
-        ctx.writeAndFlush(buildLoginReq());
+        NettyMessage msg = buildLoginReq();
+        ctx.writeAndFlush(msg);
     }
 
     private NettyMessage buildLoginReq() {
         NettyMessage message = new NettyMessage();
         Header header = new Header();
-        header.setType((byte)3); // 握手请求消息
+        header.setType(MessageType.LOGIN_REQ); // 握手请求消息
         message.setHeader(header);
         return message;
     }
@@ -213,7 +286,7 @@ class LoginAuthReqHandler extends ChannelInboundHandlerAdapter {
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         NettyMessage nettyMessage = (NettyMessage)msg;
-        if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == 4) {
+        if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == MessageType.LOGIN_RESP) {
             if (nettyMessage.getBody() != null) {
                 byte loginResult = (byte)nettyMessage.getBody();
                 if (loginResult != (byte)0) {
@@ -252,7 +325,7 @@ class LoginAuthRespHandler extends ChannelInboundHandlerAdapter {
 
     private Map<String, Boolean> nodeCheck = new ConcurrentHashMap<String, Boolean>();
 
-    private String[] whiteList = {"127.0.0.1", "192.168.199.143", "192.168.199.213"};
+    private String[] whiteList = {"127.0.0.1", "192.168.199.143", "192.168.199.213", "192.168.31.211"};
 
     @Override
     public void channelRead(ChannelHandlerContext channelHandlerContext, Object msg) throws Exception {
@@ -290,7 +363,7 @@ class LoginAuthRespHandler extends ChannelInboundHandlerAdapter {
     private NettyMessage buildLoginResponse(byte result) {
         NettyMessage message = new NettyMessage();
         Header header = new Header();
-        header.setType((byte)4); // 握手应答消息
+        header.setType(MessageType.LOGIN_RESP); // 握手应答消息
         message.setHeader(header);
         message.setBody(result);
         return message;
@@ -440,7 +513,7 @@ class MarshallingCodeCFactory {
         MarshallingConfiguration configuration = new MarshallingConfiguration();
         configuration.setVersion(5);
         UnmarshallerProvider provider = new DefaultUnmarshallerProvider(marshallerFactory, configuration);
-        NettyMarshallingDecoder decoder = new NettyMarshallingDecoder(provider, 10240);
+        NettyMarshallingDecoder decoder = new NettyMarshallingDecoder(provider, 1024 << 2);
         return decoder;
     }
 
@@ -483,5 +556,93 @@ class NettyMarshallingDecoder extends MarshallingDecoder {
     protected Object decode(ChannelHandlerContext ctx, ByteBuf in) throws Exception {
         return super.decode(ctx, in);
     }
+}
 
+@Log4j2
+class WorkerHanler extends SimpleChannelInboundHandler<NettyMessage> {
+    @Override
+    protected void channelRead0(ChannelHandlerContext channelHandlerContext, NettyMessage nettyMessage) {
+        log.info("WorkerHanler --->>> " + nettyMessage);
+        channelHandlerContext.close();
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        cause.printStackTrace();
+        ctx.close();
+    }
+
+    private class WorkerTask implements Runnable{
+
+        private final ChannelHandlerContext ctx;
+
+        public WorkerTask(final ChannelHandlerContext ctx) {
+            this.ctx = ctx;
+        }
+
+        @Override
+        public void run() {
+            NettyMessage msg = buildReqWorkerMessage();
+            ctx.writeAndFlush(msg);
+            log.info(JSON.toJSONString(msg));
+        }
+    }
+
+    private NettyMessage buildReqWorkerMessage() {
+        Worker worker = new Worker();
+        NettyMessage msg = new NettyMessage();
+        Header header = new Header();
+        header.setType(MessageType.BUSINESS_REQ);
+        msg.setHeader(header);
+        msg.setBody(worker);
+        return msg;
+    }
+}
+
+class Worker {
+    private long id;
+    private String name;
+    private Integer age;
+    private String gender;
+    private String message;
+
+    public long getId() {
+        return id;
+    }
+
+    public void setId(long id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public Integer getAge() {
+        return age;
+    }
+
+    public void setAge(Integer age) {
+        this.age = age;
+    }
+
+    public String getGender() {
+        return gender;
+    }
+
+    public void setGender(String gender) {
+        this.gender = gender;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
+    }
 }
