@@ -48,8 +48,9 @@ public class NettyClient implements CommandLineRunner{
             @Override
             public void run() {
                 try {
-                    connect("192.168.31.144", 8086);
+//                    connect("192.168.31.144", 8086);
 //                    connect("192.168.199.143", 8086);
+                    connect("10.10.18.35", 8086);
 //                    connect("192.168.199.213", 8086); // mac
 //                    connect("172.18.44.32", 8086);
                 } catch (InterruptedException e) {
@@ -286,6 +287,7 @@ class LoginAuthReqHandler extends ChannelInboundHandlerAdapter {
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         NettyMessage nettyMessage = (NettyMessage)msg;
+        log.info(ctx.channel().localAddress());
         if (nettyMessage.getHeader() != null && nettyMessage.getHeader().getType() == MessageType.LOGIN_RESP) {
             if (nettyMessage.getBody() != null) {
                 byte loginResult = (byte)nettyMessage.getBody();
